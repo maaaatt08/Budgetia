@@ -32,7 +32,10 @@ export default function Dashboard() {
   return (
     <div style={{ minHeight: "100vh", background: "#0a0a0f" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 24px", background: "#111118", borderBottom: "1px solid #1e1e2e" }}>
-        <span style={{ color: "#a78bfa", fontWeight: 700, fontSize: 18 }}>💰 BudgetAI</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 32, height: 32, background: "#6366f1", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Georgia, serif", fontSize: 20, fontWeight: 700, color: "white" }}>B</div>
+          <span style={{ fontWeight: 700, fontSize: 18, color: "white" }}>BudgetAI</span>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ color: "#64748b", fontSize: 14 }}>👤 {user?.user_metadata?.nom || user?.email}</span>
           <button onClick={handleLogout} style={{ padding: "8px 16px", background: "#1e1e2e", border: "1px solid #2a2a3e", borderRadius: 8, color: "#94a3b8", cursor: "pointer", fontSize: 13 }}>
