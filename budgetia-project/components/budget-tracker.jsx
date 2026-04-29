@@ -51,8 +51,7 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
-export default function BudgetTracker() {
-  const [view, setView] = useState("dashboard");
+export default function BudgetTracker({ view, setView }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -156,17 +155,6 @@ Historique: ${hist.map(m => `${m.month}:${m.score}`).join(", ")}
         .fu{animation:fadeUp 0.4s ease forwards}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
       `}</style>
-
-      <div style={{ borderBottom: "1px solid #1a1a28", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, position: "sticky", top: 0, background: "#07070d", zIndex: 10 }}>
-        <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, background: "linear-gradient(135deg,#6366f1,#a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontWeight: 700 }}>💸 BudgetAI</span>
-        <div style={{ display: "flex", gap: 8 }}>
-          {["dashboard", "add"].map(v => (
-            <button key={v} className="btn btn-g" onClick={() => setView(v)} style={{ padding: "6px 14px", fontSize: 13, borderColor: view === v ? "#6366f1" : "#1e1e30", color: view === v ? "#a78bfa" : "#64748b" }}>
-              {v === "dashboard" ? "📊 Tableau de bord" : "+ Nouveau mois"}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "28px 20px" }}>
 
