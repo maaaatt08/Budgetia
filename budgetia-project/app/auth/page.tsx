@@ -37,8 +37,6 @@ export default function AuthPage() {
   const s = {
     page: { minHeight: "100vh", background: "#0a0a0f", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Arial, sans-serif" },
     card: { background: "#111118", border: "1px solid #1e1e2e", borderRadius: 16, padding: 40, width: "100%", maxWidth: 420 },
-    logo: { textAlign: "center" as const, fontSize: 28, fontWeight: 700, color: "#a78bfa", marginBottom: 8 },
-    sub: { textAlign: "center" as const, color: "#64748b", fontSize: 14, marginBottom: 32 },
     tabs: { display: "flex", background: "#1e1e2e", borderRadius: 10, padding: 4, marginBottom: 28 },
     tab: (active: boolean) => ({ flex: 1, padding: "10px 0", border: "none", cursor: "pointer", borderRadius: 8, fontWeight: 600, fontSize: 14, background: active ? "#7c3aed" : "transparent", color: active ? "white" : "#64748b" }),
     label: { display: "block", color: "#94a3b8", fontSize: 13, marginBottom: 6, fontWeight: 500 },
@@ -51,8 +49,11 @@ export default function AuthPage() {
   return (
     <div style={s.page}>
       <div style={s.card}>
-        <div style={s.logo}>💰 BudgetAI</div>
-        <div style={s.sub}>Ton coach financier personnel powered by IA</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 8 }}>
+          <div style={{ width: 40, height: 40, background: "#6366f1", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Georgia, serif", fontSize: 26, fontWeight: 700, color: "white" }}>B</div>
+          <span style={{ fontWeight: 700, fontSize: 24, color: "white" }}>BudgetAI</span>
+        </div>
+        <p style={{ textAlign: "center", color: "#64748b", fontSize: 14, marginBottom: 32 }}>Ton coach financier personnel powered by IA</p>
 
         <div style={s.tabs}>
           <button style={s.tab(mode === "login")} onClick={() => setMode("login")}>Connexion</button>
