@@ -51,7 +51,7 @@ export default function AuthPage() {
   return (
     <div style={s.page}>
       <div style={s.card}>
-        <div style={s.logo}>💰 BudgetIA</div>
+        <div style={s.logo}>💰 BudgetAI</div>
         <div style={s.sub}>Ton coach financier personnel powered by IA</div>
 
         <div style={s.tabs}>
