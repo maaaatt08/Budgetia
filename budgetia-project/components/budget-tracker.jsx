@@ -56,8 +56,8 @@ export default function BudgetTracker({ view, setView }) {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState({ month: "", revenus: "", loyer: "", courses: "", transport: "", abonnements: "", loisirs: "", autres: "", objectif: "300" });
+  const [aiAnalysis, setAiAnalysis] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiMessage, setAiMessage] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -81,22 +81,61 @@ export default function BudgetTracker({ view, setView }) {
   const epDelta = latest && prev ? latest.epargne - prev.epargne : 0;
   const totalEpargne = history.reduce((s, m) => s + (m.epargne || 0), 0);
 
-  async function generateAIMessage(monthData) {
+  async function generateAIAnalysis(monthData) {
     setAiLoading(true);
+    const dep = totalDep(monthData);
+    const rev = monthData.revenus;
     const hist = history.slice(-3);
-    const prompt = `Tu es un expert en gestion de patrimoine et coach financier bienveillant. Voici les données de l'utilisateur ce mois-ci :
-Mois: ${monthData.month}, Revenus: ${monthData.revenus}€, Dépenses totales: ${totalDep(monthData)}€, Épargne: ${monthData.epargne}€, Score: ${monthData.score}/100
-Historique: ${hist.map(m => `${m.month}:${m.score}`).join(", ")}
-Écris un message de coaching personnalisé en 2-3 phrases. Sois précis, chiffré, motivant.`;
+
+    const prompt = `Tu es un conseiller financier expert et bienveillant. Analyse ce budget mensuel et réponds UNIQUEMENT en JSON pur (sans backticks).
+
+Données du mois (${monthData.month}) :
+- Revenus : ${rev}€
+- Dépenses totales : ${dep}€
+- Épargne réalisée : ${monthData.epargne}€ (objectif : ${monthData.objectif}€)
+- Score : ${monthData.score}/100
+- Loyer : ${monthData.loyer}€ (${((monthData.loyer/rev)*100).toFixed(1)}% des revenus)
+- Courses : ${monthData.courses}€ (${((monthData.courses/rev)*100).toFixed(1)}%)
+- Transport : ${monthData.transport}€ (${((monthData.transport/rev)*100).toFixed(1)}%)
+- Abonnements : ${monthData.abonnements}€ (${((monthData.abonnements/rev)*100).toFixed(1)}%)
+- Loisirs : ${monthData.loisirs}€ (${((monthData.loisirs/rev)*100).toFixed(1)}%)
+- Autres : ${monthData.autres}€ (${((monthData.autres/rev)*100).toFixed(1)}%)
+${hist.length > 0 ? `Historique récent : ${hist.map(m => `${m.month}: score ${m.score}, épargne ${m.epargne}€`).join(" | ")}` : ""}
+
+Réponds avec ce JSON exact :
+{
+  "resume": "<2 phrases percutantes résumant la situation financière avec des chiffres précis>",
+  "alertes": ["<alerte chiffrée 1>", "<alerte chiffrée 2>"],
+  "conseils": ["<conseil actionnable et chiffré 1>", "<conseil actionnable et chiffré 2>", "<conseil actionnable et chiffré 3>"],
+  "pointsForts": ["<point fort avec chiffre 1>", "<point fort avec chiffre 2>"],
+  "economiesPossibles": <montant entier en euros>,
+  "objectifAtteint": <true ou false>
+}`;
+
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }],
+        }),
       });
       const data = await res.json();
-      setAiMessage(data.content.map(i => i.text || "").join(""));
-    } catch { setAiMessage("Continue sur cette lancée, chaque euro épargné compte !"); }
+      const text = data.content.map(i => i.text || "").join("");
+      const clean = text.replace(/```json|```/g, "").trim();
+      setAiAnalysis(JSON.parse(clean));
+    } catch {
+      setAiAnalysis({
+        resume: "Analyse indisponible, mais vos données ont bien été enregistrées.",
+        alertes: [],
+        conseils: ["Consultez votre tableau de bord pour suivre votre progression."],
+        pointsForts: [],
+        economiesPossibles: 0,
+        objectifAtteint: monthData.epargne >= monthData.objectif,
+      });
+    }
     setAiLoading(false);
   }
 
@@ -125,10 +164,17 @@ Historique: ${hist.map(m => `${m.month}:${m.score}`).join(", ")}
       epargne: ep, score, objectif: parseFloat(form.objectif)||300,
     };
     const { data, error } = await supabase.from("budget_entries").insert([entry]).select();
-    if (!error && data) { setHistory([...history, data[0]]); generateAIMessage(data[0]); }
-    setSaving(false);
-    setView("dashboard");
-    setForm({ month: "", revenus: "", loyer: "", courses: "", transport: "", abonnements: "", loisirs: "", autres: "", objectif: "300" });
+    if (!error && data) {
+      const newHistory = [...history, data[0]];
+      setHistory(newHistory);
+      setAiAnalysis(null);
+      setSaving(false);
+      setForm({ month: "", revenus: "", loyer: "", courses: "", transport: "", abonnements: "", loisirs: "", autres: "", objectif: "300" });
+      setView("analysis");
+      generateAIAnalysis(data[0]);
+    } else {
+      setSaving(false);
+    }
   }
 
   const MONTHS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
@@ -154,10 +200,13 @@ Historique: ${hist.map(m => `${m.month}:${m.score}`).join(", ")}
         @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
         .fu{animation:fadeUp 0.4s ease forwards}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+        @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+        .shimmer{background:linear-gradient(90deg,#1a1a28 25%,#2a2a3e 50%,#1a1a28 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
       `}</style>
 
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "28px 20px" }}>
 
+        {/* DASHBOARD VIDE */}
         {view === "dashboard" && history.length === 0 && (
           <div className="fu" style={{ textAlign: "center", padding: "80px 20px" }}>
             <div style={{ fontSize: 64, marginBottom: 16 }}>💰</div>
@@ -167,19 +216,9 @@ Historique: ${hist.map(m => `${m.month}:${m.score}`).join(", ")}
           </div>
         )}
 
+        {/* DASHBOARD */}
         {view === "dashboard" && history.length > 0 && (
           <div className="fu">
-            {(aiMessage || aiLoading) && (
-              <div style={{ background: "linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.08))", border: "1px solid rgba(99,102,241,0.25)", borderRadius: 14, padding: "14px 18px", marginBottom: 20, display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <span style={{ fontSize: 22 }}>🤖</span>
-                <div>
-                  <div style={{ fontSize: 11, color: "#6366f1", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>Coach IA</div>
-                  {aiLoading ? <div style={{ display: "flex", gap: 5 }}>{[0,1,2].map(i => <span key={i} style={{ width: 6, height: 6, background: "#6366f1", borderRadius: "50%", animation: `pulse 1.2s ${i*0.2}s infinite` }} />)}</div>
-                  : <p style={{ color: "#c4b5fd", fontSize: 13, lineHeight: 1.7 }}>{aiMessage}</p>}
-                </div>
-              </div>
-            )}
-
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
               {[
                 { label: "Score ce mois", value: `${latest.score}/100`, sub: scoreDelta >= 0 ? `↑ +${scoreDelta} pts` : `↓ ${scoreDelta} pts`, subColor: scoreDelta >= 0 ? "#10b981" : "#ef4444", accent: scoreColor(latest.score) },
@@ -292,6 +331,7 @@ Historique: ${hist.map(m => `${m.month}:${m.score}`).join(", ")}
           </div>
         )}
 
+        {/* FORMULAIRE NOUVEAU MOIS */}
         {view === "add" && (
           <div className="fu" style={{ maxWidth: 520, margin: "0 auto" }}>
             <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, marginBottom: 6, background: "linear-gradient(135deg,#6366f1,#a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Nouveau mois</h2>
@@ -345,6 +385,153 @@ Historique: ${hist.map(m => `${m.month}:${m.score}`).join(", ")}
           </div>
         )}
 
+        {/* PAGE ANALYSE IA */}
+        {view === "analysis" && history.length > 0 && (
+          <div className="fu" style={{ maxWidth: 700, margin: "0 auto" }}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+              <div>
+                <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, background: "linear-gradient(135deg,#6366f1,#a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                  Analyse IA — {latest.month}
+                </h2>
+                <p style={{ color: "#475569", fontSize: 13, marginTop: 4 }}>Rapport de votre conseiller financier personnel</p>
+              </div>
+              <button className="btn btn-g" onClick={() => setView("dashboard")} style={{ padding: "8px 16px", fontSize: 13 }}>
+                Voir le tableau de bord →
+              </button>
+            </div>
+
+            {/* Score + résumé */}
+            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 16, marginBottom: 16 }}>
+              <div className="card" style={{ padding: 24, textAlign: "center", minWidth: 130 }}>
+                <ScoreRing score={latest.score} size={90} />
+                <div style={{ fontSize: 11, color: "#475569", marginTop: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>Score</div>
+                <div style={{ marginTop: 6, fontSize: 12, fontWeight: 700, color: scoreColor(latest.score), background: `${scoreColor(latest.score)}20`, padding: "3px 10px", borderRadius: 20, display: "inline-block" }}>
+                  {scoreLabel(latest.score)}
+                </div>
+              </div>
+              <div className="card" style={{ padding: 20 }}>
+                <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>🤖 Résumé du conseiller</div>
+                {aiLoading ? (
+                  <div>
+                    <div className="shimmer" style={{ height: 14, borderRadius: 6, marginBottom: 8, width: "100%" }} />
+                    <div className="shimmer" style={{ height: 14, borderRadius: 6, width: "80%" }} />
+                  </div>
+                ) : (
+                  <p style={{ color: "#cbd5e1", lineHeight: 1.7, fontSize: 14 }}>{aiAnalysis?.resume}</p>
+                )}
+                <div style={{ display: "flex", gap: 16, marginTop: 16, flexWrap: "wrap" }}>
+                  {[
+                    { label: "Revenus", value: `${latest.revenus}€`, color: "#10b981" },
+                    { label: "Dépenses", value: `${totalDep(latest)}€`, color: "#ef4444" },
+                    { label: "Épargne", value: `${latest.epargne}€`, color: latest.epargne >= latest.objectif ? "#10b981" : "#f59e0b" },
+                    { label: "Économies possibles", value: aiLoading ? "..." : `+${aiAnalysis?.economiesPossibles || 0}€`, color: "#f59e0b" },
+                  ].map((s, i) => (
+                    <div key={i}>
+                      <div style={{ fontSize: 11, color: "#475569", textTransform: "uppercase" }}>{s.label}</div>
+                      <div style={{ fontSize: 17, fontWeight: 700, color: s.color }}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Objectif badge */}
+                {!aiLoading && aiAnalysis && (
+                  <div style={{ marginTop: 12, display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, background: aiAnalysis.objectifAtteint ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)", border: `1px solid ${aiAnalysis.objectifAtteint ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)"}` }}>
+                    <span>{aiAnalysis.objectifAtteint ? "✅" : "🎯"}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: aiAnalysis.objectifAtteint ? "#10b981" : "#f59e0b" }}>
+                      {aiAnalysis.objectifAtteint ? `Objectif atteint ! (${latest.objectif}€)` : `Objectif : ${latest.epargne}€ / ${latest.objectif}€`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Alertes & Points forts */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+              <div className="card" style={{ padding: 20 }}>
+                <div style={{ fontSize: 12, color: "#ef4444", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>⚠️ Points d'attention</div>
+                {aiLoading ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[1, 2].map(i => <div key={i} className="shimmer" style={{ height: 52, borderRadius: 8 }} />)}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {aiAnalysis?.alertes?.length ? aiAnalysis.alertes.map((a, i) => (
+                      <div key={i} style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#fca5a5", lineHeight: 1.5 }}>{a}</div>
+                    )) : <div style={{ color: "#475569", fontSize: 13 }}>Aucune alerte ce mois-ci 🎉</div>}
+                  </div>
+                )}
+              </div>
+              <div className="card" style={{ padding: 20 }}>
+                <div style={{ fontSize: 12, color: "#10b981", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>✅ Points forts</div>
+                {aiLoading ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[1, 2].map(i => <div key={i} className="shimmer" style={{ height: 52, borderRadius: 8 }} />)}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {aiAnalysis?.pointsForts?.length ? aiAnalysis.pointsForts.map((p, i) => (
+                      <div key={i} style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.15)", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#6ee7b7", lineHeight: 1.5 }}>{p}</div>
+                    )) : <div style={{ color: "#475569", fontSize: 13 }}>Continuez vos efforts !</div>}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Conseils personnalisés */}
+            <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: "#f59e0b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 14 }}>💡 Conseils personnalisés de votre conseiller</div>
+              {aiLoading ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {[1, 2, 3].map(i => (
+                    <div key={i} style={{ display: "flex", gap: 10 }}>
+                      <div className="shimmer" style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <div className="shimmer" style={{ height: 13, borderRadius: 6, marginBottom: 6, width: "100%" }} />
+                        <div className="shimmer" style={{ height: 13, borderRadius: 6, width: "70%" }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {aiAnalysis?.conseils?.map((c, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <span style={{ background: "rgba(245,158,11,0.15)", color: "#fbbf24", borderRadius: "50%", width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
+                      <span style={{ fontSize: 13, color: "#cbd5e1", lineHeight: 1.6 }}>{c}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Répartition dépenses */}
+            <div className="card" style={{ padding: 20 }}>
+              <div style={{ fontSize: 11, color: "#475569", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 16 }}>🗂️ Répartition des dépenses — {latest.month}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {Object.entries(CAT_LABELS).map(([key, label]) => {
+                  const amt = latest[key] || 0;
+                  const pct = latest.revenus > 0 ? (amt / latest.revenus) * 100 : 0;
+                  return (
+                    <div key={key}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, alignItems: "center" }}>
+                        <span style={{ fontSize: 13, color: "#cbd5e1" }}>{label}</span>
+                        <div style={{ display: "flex", gap: 10 }}>
+                          <span style={{ fontSize: 11, color: "#475569" }}>{pct.toFixed(1)}%</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: CAT_COLORS[key], minWidth: 55, textAlign: "right" }}>{amt}€</span>
+                        </div>
+                      </div>
+                      <div style={{ height: 5, background: "#1a1a28", borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.min(pct * 1.5, 100)}%`, background: CAT_COLORS[key], borderRadius: 3, transition: "width 0.8s ease" }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DETAIL MOIS */}
         {view === "detail" && selected && (
           <div className="fu" style={{ maxWidth: 560, margin: "0 auto" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
