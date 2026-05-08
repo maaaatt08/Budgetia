@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 
 const BudgetTracker = dynamic(() => import("../../components/budget-tracker"), { ssr: false });
 
-const STRIPE_LINK = "https://buy.stripe.com/test_cNil4n0aC7dab000Ca9bO00";
+const STRIPE_LINK = "https://buy.stripe.com/test_cNi14n0aC7dab000Ca9b000";
 
 export default function Dashboard() {
   const router = useRouter();
