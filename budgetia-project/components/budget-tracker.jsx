@@ -59,6 +59,7 @@ export default function BudgetTracker({ view, setView }) {
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     async function loadData() {
@@ -150,11 +151,22 @@ Réponds avec ce JSON exact :
   }
 
   async function addMonth() {
+    setErrorMsg("");
     setSaving(true);
+
+    // Vérifier si le mois existe déjà
+    const moisExistant = history.find(m => m.month === form.month);
+    if (moisExistant) {
+      setErrorMsg(`Le mois "${form.month}" a déjà été ajouté. Choisis un autre mois.`);
+      setSaving(false);
+      return;
+    }
+
     const dep = ["loyer", "courses", "transport", "abonnements", "loisirs", "autres"].reduce((s, k) => s + (parseFloat(form[k]) || 0), 0);
     const rev = parseFloat(form.revenus) || 0;
     const ep = Math.max(0, rev - dep);
     const score = computeScore({ ...form, epargne: ep });
+
     const { data: { session } } = await supabase.auth.getSession();
     const entry = {
       user_id: session.user.id, month: form.month, revenus: rev,
@@ -163,16 +175,25 @@ Réponds avec ce JSON exact :
       loisirs: parseFloat(form.loisirs)||0, autres: parseFloat(form.autres)||0,
       epargne: ep, score, objectif: parseFloat(form.objectif)||300,
     };
+
     const { data, error } = await supabase.from("budget_entries").insert([entry]).select();
-    if (!error && data) {
-      const newHistory = [...history, data[0]];
-      setHistory(newHistory);
+
+    if (error) {
+      console.error("Supabase error:", error);
+      setErrorMsg(`Erreur : ${error.message}`);
+      setSaving(false);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      setHistory([...history, data[0]]);
       setAiAnalysis(null);
       setSaving(false);
       setForm({ month: "", revenus: "", loyer: "", courses: "", transport: "", abonnements: "", loisirs: "", autres: "", objectif: "300" });
       setView("analysis");
       generateAIAnalysis(data[0]);
     } else {
+      setErrorMsg("Aucune donnée retournée par la base. Réessaie.");
       setSaving(false);
     }
   }
@@ -196,6 +217,7 @@ Réponds avec ce JSON exact :
         .inp:focus{border-color:#6366f1}
         .btn{border:none;border-radius:10px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.2s}
         .btn-p{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white}.btn-p:hover{box-shadow:0 6px 20px rgba(99,102,241,0.4);transform:translateY(-1px)}
+        .btn-p:disabled{opacity:0.5;cursor:not-allowed;transform:none;box-shadow:none}
         .btn-g{background:#13131e;border:1px solid #1e1e30;color:#94a3b8}.btn-g:hover{border-color:#6366f1;color:#a78bfa}
         @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
         .fu{animation:fadeUp 0.4s ease forwards}
@@ -336,11 +358,12 @@ Réponds avec ce JSON exact :
           <div className="fu" style={{ maxWidth: 520, margin: "0 auto" }}>
             <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, marginBottom: 6, background: "linear-gradient(135deg,#6366f1,#a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Nouveau mois</h2>
             <p style={{ color: "#475569", fontSize: 13, marginBottom: 24 }}>Entrez vos données et l'IA analysera votre progression.</p>
+
             <div className="card" style={{ padding: 24, marginBottom: 12 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Mois</label>
-                  <select className="inp" value={form.month} onChange={e => setForm({ ...form, month: e.target.value })}>
+                  <select className="inp" value={form.month} onChange={e => { setForm({ ...form, month: e.target.value }); setErrorMsg(""); }}>
                     <option value="">Choisir...</option>
                     {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
@@ -351,6 +374,7 @@ Réponds avec ce JSON exact :
                 </div>
               </div>
             </div>
+
             <div className="card" style={{ padding: 24, marginBottom: 12 }}>
               <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", marginBottom: 14 }}>Dépenses mensuelles</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -366,10 +390,12 @@ Réponds avec ce JSON exact :
                 ))}
               </div>
             </div>
-            <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+
+            <div className="card" style={{ padding: 20, marginBottom: 16 }}>
               <label style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", display: "block", marginBottom: 6 }}>🎯 Objectif d'épargne (€)</label>
               <input className="inp" type="number" placeholder="300" value={form.objectif} onChange={e => setForm({ ...form, objectif: e.target.value })} />
             </div>
+
             {form.revenus && (
               <div style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
                 <div style={{ fontSize: 12, color: "#a78bfa", fontWeight: 600, marginBottom: 6 }}>Aperçu</div>
@@ -379,6 +405,14 @@ Réponds avec ce JSON exact :
                 </div>
               </div>
             )}
+
+            {/* Message d'erreur visible */}
+            {errorMsg && (
+              <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "12px 16px", marginBottom: 16, color: "#fca5a5", fontSize: 13 }}>
+                ⚠️ {errorMsg}
+              </div>
+            )}
+
             <button className="btn btn-p" onClick={addMonth} disabled={!form.month || !form.revenus || saving} style={{ width: "100%", padding: "13px 24px", fontSize: 15 }}>
               {saving ? "Sauvegarde en cours..." : "✨ Analyser ce mois"}
             </button>
@@ -388,7 +422,6 @@ Réponds avec ce JSON exact :
         {/* PAGE ANALYSE IA */}
         {view === "analysis" && history.length > 0 && (
           <div className="fu" style={{ maxWidth: 700, margin: "0 auto" }}>
-            {/* Header */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
               <div>
                 <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, background: "linear-gradient(135deg,#6366f1,#a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
@@ -401,7 +434,6 @@ Réponds avec ce JSON exact :
               </button>
             </div>
 
-            {/* Score + résumé */}
             <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 16, marginBottom: 16 }}>
               <div className="card" style={{ padding: 24, textAlign: "center", minWidth: 130 }}>
                 <ScoreRing score={latest.score} size={90} />
@@ -433,7 +465,6 @@ Réponds avec ce JSON exact :
                     </div>
                   ))}
                 </div>
-                {/* Objectif badge */}
                 {!aiLoading && aiAnalysis && (
                   <div style={{ marginTop: 12, display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, background: aiAnalysis.objectifAtteint ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)", border: `1px solid ${aiAnalysis.objectifAtteint ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)"}` }}>
                     <span>{aiAnalysis.objectifAtteint ? "✅" : "🎯"}</span>
@@ -445,7 +476,6 @@ Réponds avec ce JSON exact :
               </div>
             </div>
 
-            {/* Alertes & Points forts */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
               <div className="card" style={{ padding: 20 }}>
                 <div style={{ fontSize: 12, color: "#ef4444", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>⚠️ Points d'attention</div>
@@ -477,7 +507,6 @@ Réponds avec ce JSON exact :
               </div>
             </div>
 
-            {/* Conseils personnalisés */}
             <div className="card" style={{ padding: 20, marginBottom: 16 }}>
               <div style={{ fontSize: 12, color: "#f59e0b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 14 }}>💡 Conseils personnalisés de votre conseiller</div>
               {aiLoading ? (
@@ -504,7 +533,6 @@ Réponds avec ce JSON exact :
               )}
             </div>
 
-            {/* Répartition dépenses */}
             <div className="card" style={{ padding: 20 }}>
               <div style={{ fontSize: 11, color: "#475569", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 16 }}>🗂️ Répartition des dépenses — {latest.month}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
