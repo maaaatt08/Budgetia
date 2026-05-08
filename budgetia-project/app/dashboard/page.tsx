@@ -39,7 +39,7 @@ export default function Dashboard() {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {["dashboard", "add"].map(v => (
-            <button key={v} onClick={() => setView(v)} style={{ padding: "6px 14px", fontSize: 13, borderRadius: 8, border: "1px solid", borderColor: view === v ? "#6366f1" : "#1e1e2e", background: view === v ? "rgba(99,102,241,0.1)" : "#1e1e2e", color: view === v ? "#a78bfa" : "#64748b", cursor: "pointer", fontWeight: 600 }}>
+            <button key={v} onClick={() => setView(v)} style={{ padding: "6px 14px", fontSize: 13, borderRadius: 8, border: "1px solid", borderColor: (view === v || (v === "dashboard" && view === "analysis")) ? "#6366f1" : "#1e1e2e", background: (view === v || (v === "dashboard" && view === "analysis")) ? "rgba(99,102,241,0.1)" : "#1e1e2e", color: (view === v || (v === "dashboard" && view === "analysis")) ? "#a78bfa" : "#64748b", cursor: "pointer", fontWeight: 600 }}>
               {v === "dashboard" ? "📊 Tableau de bord" : "+ Nouveau mois"}
             </button>
           ))}
@@ -55,4 +55,5 @@ export default function Dashboard() {
     </div>
   );
 }
+
 
