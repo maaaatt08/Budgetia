@@ -6,8 +6,6 @@ import dynamic from "next/dynamic";
 
 const BudgetTracker = dynamic(() => import("../../components/budget-tracker"), { ssr: false });
 
-const STRIPE_LINK = "https://buy.stripe.com/test_cNi14n0aC7dab000Ca9b000";
-
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -47,9 +45,6 @@ export default function Dashboard() {
           ))}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <a href={STRIPE_LINK} target="_blank" rel="noopener noreferrer" style={{ padding: "7px 16px", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", borderRadius: 8, color: "white", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
-            ⚡ S'abonner — 4,99€/mois
-          </a>
           <span style={{ color: "#64748b", fontSize: 13 }}>👤 {user?.user_metadata?.nom || user?.email}</span>
           <button onClick={handleLogout} style={{ padding: "7px 14px", background: "#1e1e2e", border: "1px solid #2a2a3e", borderRadius: 8, color: "#94a3b8", cursor: "pointer", fontSize: 13 }}>
             Déconnexion
@@ -60,3 +55,4 @@ export default function Dashboard() {
     </div>
   );
 }
+
